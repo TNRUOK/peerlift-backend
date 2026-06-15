@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from database import db, User, Query, Meet
+from database import db, User, Query, Meet, Message
 
 app = Flask(__name__)
 CORS(app)
@@ -10,10 +10,18 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
-# --- USER ---
+# --- USERS ---
+@app.route("/api/users", methods=["GET"])
+def get_users():
+    users = User.query.all()
+    return jsonify([{"id": u.id, "name": u.name} for u in users])
+
 @app.route("/api/users", methods=["POST"])
 def create_user():
     data = request.json
+    existing = User.query.filter_by(name=data["name"]).first()
+    if existing:
+        return jsonify({"id": existing.id, "name": existing.name}), 200
     user = User(name=data["name"])
     db.session.add(user)
     db.session.commit()
@@ -22,7 +30,7 @@ def create_user():
 # --- QUERIES ---
 @app.route("/api/queries", methods=["GET"])
 def get_queries():
-    queries = Query.query.all()
+    queries = Query.query.order_by(Query.id.desc()).all()
     return jsonify([{
         "id": q.id, "title": q.title,
         "description": q.description,
@@ -48,7 +56,7 @@ def post_query():
 # --- MEETS ---
 @app.route("/api/meets", methods=["GET"])
 def get_meets():
-    meets = Meet.query.all()
+    meets = Meet.query.order_by(Meet.id.desc()).all()
     return jsonify([{
         "id": m.id, "subject": m.subject,
         "topic": m.topic, "date": m.date,
@@ -59,7 +67,7 @@ def get_meets():
 def schedule_meet():
     data = request.json
     m = Meet(
-        subject=data["subject"],
+        subject=data.get("subject", ""),
         topic=data["topic"],
         description=data.get("description", ""),
         date=data["date"],
@@ -69,6 +77,34 @@ def schedule_meet():
     db.session.add(m)
     db.session.commit()
     return jsonify({"message": "Meet scheduled", "id": m.id}), 201
+
+# --- MESSAGES ---
+@app.route("/api/messages", methods=["GET"])
+def get_messages():
+    user1 = request.args.get("user1")
+    user2 = request.args.get("user2")
+    messages = Message.query.filter(
+        ((Message.sender == user1) & (Message.receiver == user2)) |
+        ((Message.sender == user2) & (Message.receiver == user1))
+    ).order_by(Message.id.asc()).all()
+    return jsonify([{
+        "id": m.id,
+        "sender": m.sender,
+        "receiver": m.receiver,
+        "message": m.message
+    } for m in messages])
+
+@app.route("/api/messages", methods=["POST"])
+def send_message():
+    data = request.json
+    m = Message(
+        sender=data["sender"],
+        receiver=data["receiver"],
+        message=data["message"]
+    )
+    db.session.add(m)
+    db.session.commit()
+    return jsonify({"message": "Sent", "id": m.id}), 201
 
 if __name__ == "__main__":
     app.run(debug=True)

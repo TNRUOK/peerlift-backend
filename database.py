@@ -4,7 +4,7 @@ db = SQLAlchemy()
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100), nullable=False, unique=True)
 
 class Query(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -12,7 +12,7 @@ class Query(db.Model):
     description = db.Column(db.Text, nullable=False)
     subject = db.Column(db.String(100))
     author = db.Column(db.String(100))
-    target = db.Column(db.String(50))   # Batchmate, Senior, etc.
+    target = db.Column(db.String(50))
 
 class Meet(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -22,3 +22,9 @@ class Meet(db.Model):
     date = db.Column(db.String(50))
     time = db.Column(db.String(50))
     host = db.Column(db.String(100))
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sender = db.Column(db.String(100), nullable=False)
+    receiver = db.Column(db.String(100), nullable=False)
+    message = db.Column(db.Text, nullable=False)
