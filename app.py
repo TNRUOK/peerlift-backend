@@ -3,9 +3,14 @@ from flask_cors import CORS
 from database import db, User, Query, Meet, Message
 import hashlib
 import secrets
+import os
+
 
 app = Flask(__name__)
 CORS(app)
+
+if os.path.exists("peerlift.db"):
+    os.remove("peerlift.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///peerlift.db"
 db.init_app(app)
 
