@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from database import db, User, Query, Meet, Message
+import hashlib
+import secrets
 
 app = Flask(__name__)
 CORS(app)
@@ -10,24 +12,59 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
-# --- USERS ---
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def generate_token(user_id):
+    return secrets.token_hex(32) + str(user_id)
+
+# ==========================================
+# AUTH
+# ==========================================
+@app.route("/api/register", methods=["POST"])
+def register():
+    data = request.json
+    if not data.get("email") or not data.get("password") or not data.get("name"):
+        return jsonify({"error": "All fields required"}), 400
+    existing = User.query.filter_by(email=data["email"]).first()
+    if existing:
+        return jsonify({"error": "Email already registered"}), 409
+    user = User(
+        name=data["name"],
+        email=data["email"],
+        password=hash_password(data["password"]),
+        token=generate_token(0)
+    )
+    db.session.add(user)
+    db.session.commit()
+    user.token = generate_token(user.id)
+    db.session.commit()
+    return jsonify({"id": user.id, "name": user.name, "email": user.email, "token": user.token}), 201
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.json
+    if not data.get("email") or not data.get("password"):
+        return jsonify({"error": "Email and password required"}), 400
+    user = User.query.filter_by(
+        email=data["email"],
+        password=hash_password(data["password"])
+    ).first()
+    if not user:
+        return jsonify({"error": "Invalid email or password"}), 401
+    return jsonify({"id": user.id, "name": user.name, "email": user.email, "token": user.token}), 200
+
+# ==========================================
+# USERS
+# ==========================================
 @app.route("/api/users", methods=["GET"])
 def get_users():
     users = User.query.all()
-    return jsonify([{"id": u.id, "name": u.name} for u in users])
+    return jsonify([{"id": u.id, "name": u.name, "email": u.email} for u in users])
 
-@app.route("/api/users", methods=["POST"])
-def create_user():
-    data = request.json
-    existing = User.query.filter_by(name=data["name"]).first()
-    if existing:
-        return jsonify({"id": existing.id, "name": existing.name}), 200
-    user = User(name=data["name"])
-    db.session.add(user)
-    db.session.commit()
-    return jsonify({"id": user.id, "name": user.name}), 201
-
-# --- QUERIES ---
+# ==========================================
+# QUERIES
+# ==========================================
 @app.route("/api/queries", methods=["GET"])
 def get_queries():
     queries = Query.query.order_by(Query.id.desc()).all()
@@ -45,7 +82,7 @@ def post_query():
     q = Query(
         title=data["title"],
         description=data["description"],
-        subject=data.get("subject", ""),
+        subject=data.get("subject", "General"),
         author=data.get("author", "Anonymous"),
         target=data.get("target", "")
     )
@@ -53,14 +90,17 @@ def post_query():
     db.session.commit()
     return jsonify({"message": "Query posted", "id": q.id}), 201
 
-# --- MEETS ---
+# ==========================================
+# MEETS
+# ==========================================
 @app.route("/api/meets", methods=["GET"])
 def get_meets():
     meets = Meet.query.order_by(Meet.id.desc()).all()
     return jsonify([{
         "id": m.id, "subject": m.subject,
         "topic": m.topic, "date": m.date,
-        "time": m.time, "host": m.host
+        "time": m.time, "host": m.host,
+        "description": m.description
     } for m in meets])
 
 @app.route("/api/meets", methods=["POST"])
@@ -78,7 +118,9 @@ def schedule_meet():
     db.session.commit()
     return jsonify({"message": "Meet scheduled", "id": m.id}), 201
 
-# --- MESSAGES ---
+# ==========================================
+# MESSAGES
+# ==========================================
 @app.route("/api/messages", methods=["GET"])
 def get_messages():
     user1 = request.args.get("user1")
