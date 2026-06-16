@@ -5,12 +5,15 @@ import hashlib
 import secrets
 import os
 
+# Delete old db to reset schema
+db_path = os.path.join(os.path.dirname(__file__), "peerlift.db")
+if os.path.exists(db_path):
+    os.remove(db_path)
+
 
 app = Flask(__name__)
 CORS(app)
 
-if os.path.exists("peerlift.db"):
-    os.remove("peerlift.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///peerlift.db"
 db.init_app(app)
 
